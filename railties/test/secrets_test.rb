@@ -9,22 +9,15 @@ class Rails::SecretsTest < ActiveSupport::TestCase
 
   def setup
     build_app
-
-    @old_read_encrypted_secrets, Rails::Secrets.read_encrypted_secrets =
-      Rails::Secrets.read_encrypted_secrets, true
   end
 
   def teardown
-    Rails::Secrets.read_encrypted_secrets = @old_read_encrypted_secrets
-
     teardown_app
   end
 
   test "setting read to false skips parsing" do
-    Rails::Secrets.read_encrypted_secrets = false
-
     Dir.chdir(app_path) do
-      assert_equal Hash.new, Rails::Secrets.parse(%w( config/secrets.yml.enc ), env: "production")
+      assert_equal Hash.new, Rails::Secrets.parse(%w( config/secrets.yml.enc ), env: "production", read_encrypted_secrets: false)
     end
   end
 
@@ -90,6 +83,7 @@ class Rails::SecretsTest < ActiveSupport::TestCase
       end_of_secrets
 
       Rails.application.config.root = app_path
+      Rails.application.config.read_encrypted_secrets = true
       Rails.application.instance_variable_set(:@secrets, nil) # Dance around caching 💃🕺
       assert_equal "lets-walk-in-the-cool-evening-light", Rails.application.secrets.yeah_yeah
     end

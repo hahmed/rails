@@ -14,18 +14,16 @@ module Rails
     end
 
     @cipher = "aes-128-gcm"
-    @read_encrypted_secrets = false
     @root = File # Wonky, but ensures `join` uses the current directory.
 
     class << self
-      attr_writer   :root
-      attr_accessor :read_encrypted_secrets
+      attr_writer :root
 
-      def parse(paths, env:)
+      def parse(paths, env:, read_encrypted_secrets:)
         paths.each_with_object(Hash.new) do |path, all_secrets|
           require "erb"
 
-          secrets = YAML.load(ERB.new(preprocess(path)).result) || {}
+          secrets = YAML.load(ERB.new(preprocess(path, read_encrypted_secrets: read_encrypted_secrets)).result) || {}
           all_secrets.merge!(secrets["shared"].deep_symbolize_keys) if secrets["shared"]
           all_secrets.merge!(secrets[env].deep_symbolize_keys) if secrets[env]
         end
@@ -86,9 +84,9 @@ module Rails
           @root.join("config", "secrets.yml.enc").to_s
         end
 
-        def preprocess(path)
+        def preprocess(path, read_encrypted_secrets:)
           if path.end_with?(".enc")
-            if @read_encrypted_secrets
+            if read_encrypted_secrets
               decrypt(IO.binread(path))
             else
               ""

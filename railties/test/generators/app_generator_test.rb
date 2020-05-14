@@ -114,26 +114,98 @@ class AppGeneratorTest < Rails::Generators::TestCase
     end
   end
 
-  def test_assets
+  def test_new_app_defaults
     run_generator
 
     assert_file("app/views/layouts/application.html.erb", /stylesheet_link_tag\s+'application', media: 'all', 'data-turbolinks-track': 'reload'/)
     assert_file("app/views/layouts/application.html.erb", /javascript_pack_tag\s+'application', 'data-turbolinks-track': 'reload'/)
     assert_file("app/assets/stylesheets/application.css")
     assert_file("app/javascript/packs/application.js")
+
+    # job file present
+    assert_file("app/jobs/application_job.rb")
+
+    # use_json_serializer
+    assert_file("config/initializers/cookies_serializer.rb", /Rails\.application\.config\.action_dispatch\.cookies_serializer = :json/)
+
+    # not_include_api_initializers
+    assert_no_file "config/initializers/cors.rb"
+
+    # no defaults included for new apps
+    assert_no_file "config/initializers/new_framework_defaults_6_1.rb"
+
+    # csp_initializer_include_connect_src_example
+    assert_file "config/initializers/content_security_policy.rb" do |content|
+      assert_match(/#   policy\.connect_src/, content)
+    end
+
+    # test for active storage
+    assert_file "Gemfile", /^# gem 'image_processing'/
+
+    # gemfile has no whitespace errors
+    absolute = File.expand_path("Gemfile", destination_root)
+    File.open(absolute, "r") do |f|
+      f.each_line do |line|
+        assert_no_match %r{/^[ \t]+$/}, line
+      end
+    end
+
+    # config database is added by default
+    assert_file "config/database.yml", /sqlite3/
+    if defined?(JRUBY_VERSION)
+      assert_gem "activerecord-jdbcsqlite3-adapter"
+    else
+      assert_gem "sqlite3", "'~> 1.4'"
+    end
+
+    # added assets gems
+    assert_gem "sass-rails"
+
+    # added action cable redis gem
+    assert_file "Gemfile", /^# gem 'redis'/
+
+    # adds jbuilder
+    assert_gem "jbuilder"
+
+    # adds a debugger
+    if defined?(JRUBY_VERSION) || RUBY_ENGINE == "rbx"
+      assert_no_gem "byebug"
+    else
+      assert_gem "byebug"
+    end
+
+
+    # adds listen related configuration by default
+    if /darwin|linux/.match?(RbConfig::CONFIG["host_os"])
+      assert_listen_related_configuration
+    else
+      assert_no_listen_related_configuration
+    end
+
+    # adds evented file update checker in config
+    assert_file "config/environments/development.rb" do |content|
+      if /darwin|linux/.match?(RbConfig::CONFIG["host_os"])
+        assert_match(/^\s*config\.file_watcher = ActiveSupport::EventedFileUpdateChecker/, content)
+      else
+        assert_match(/^\s*# config\.file_watcher = ActiveSupport::EventedFileUpdateChecker/, content)
+      end
+    end
+
+    # adds web console gem
+    assert_gem "web-console"
   end
 
-  def test_application_job_file_present
-    run_generator
-    assert_file("app/jobs/application_job.rb")
-  end
+  # def test_application_job_file_present
+  #   run_generator
+  #   assert_file("app/jobs/application_job.rb")
+  # end
 
   def test_invalid_application_name_raises_an_error
     content = capture(:stderr) { run_generator [File.join(destination_root, "43-things")] }
     assert_equal "Invalid application name 43-things. Please give a name which does not start with numbers.\n", content
   end
 
-  def test_invalid_application_name_is_fixed
+  def test_valid_application_name_is_fixed
     run_generator [File.join(destination_root, "things-43")]
     assert_file "things-43/config/environment.rb", /Rails\.application\.initialize!/
     assert_file "things-43/config/application.rb", /^module Things43$/
@@ -187,22 +259,22 @@ class AppGeneratorTest < Rails::Generators::TestCase
     end
   end
 
-  def test_new_application_use_json_serializer
-    run_generator
+  # def test_new_application_use_json_serializer
+  #   run_generator
+  #
+  #   assert_file("config/initializers/cookies_serializer.rb", /Rails\.application\.config\.action_dispatch\.cookies_serializer = :json/)
+  # end
+  #
+  # def test_new_application_not_include_api_initializers
+  #   run_generator
+  #
+  #   assert_no_file "config/initializers/cors.rb"
+  # end
 
-    assert_file("config/initializers/cookies_serializer.rb", /Rails\.application\.config\.action_dispatch\.cookies_serializer = :json/)
-  end
-
-  def test_new_application_not_include_api_initializers
-    run_generator
-
-    assert_no_file "config/initializers/cors.rb"
-  end
-
-  def test_new_application_doesnt_need_defaults
-    run_generator
-    assert_no_file "config/initializers/new_framework_defaults_6_1.rb"
-  end
+  # def test_new_application_doesnt_need_defaults
+  #   run_generator
+  #   assert_no_file "config/initializers/new_framework_defaults_6_1.rb"
+  # end
 
   def test_new_application_load_defaults
     app_root = File.join(destination_root, "myfirstapp")
@@ -219,13 +291,13 @@ class AppGeneratorTest < Rails::Generators::TestCase
     assert_equal "false\n", output
   end
 
-  def test_csp_initializer_include_connect_src_example
-    run_generator
-
-    assert_file "config/initializers/content_security_policy.rb" do |content|
-      assert_match(/#   policy\.connect_src/, content)
-    end
-  end
+  # def test_csp_initializer_include_connect_src_example
+  #   run_generator
+  #
+  #   assert_file "config/initializers/content_security_policy.rb" do |content|
+  #     assert_match(/#   policy\.connect_src/, content)
+  #   end
+  # end
 
   def test_app_update_keep_the_cookie_serializer_if_it_is_already_configured
     app_root = File.join(destination_root, "myapp")
@@ -370,10 +442,10 @@ class AppGeneratorTest < Rails::Generators::TestCase
     end
   end
 
-  def test_gem_for_active_storage
-    run_generator
-    assert_file "Gemfile", /^# gem 'image_processing'/
-  end
+  # def test_gem_for_active_storage
+  #   run_generator
+  #   assert_file "Gemfile", /^# gem 'image_processing'/
+  # end
 
   def test_gem_for_active_storage_when_skip_active_storage_is_given
     run_generator [destination_root, "--skip-active-storage"]
@@ -506,25 +578,25 @@ class AppGeneratorTest < Rails::Generators::TestCase
     assert_file "hats/config/environment.rb", /Rails\.application\.initialize!/
   end
 
-  def test_gemfile_has_no_whitespace_errors
-    run_generator
-    absolute = File.expand_path("Gemfile", destination_root)
-    File.open(absolute, "r") do |f|
-      f.each_line do |line|
-        assert_no_match %r{/^[ \t]+$/}, line
-      end
-    end
-  end
+  # def test_gemfile_has_no_whitespace_errors
+  #   run_generator
+  #   absolute = File.expand_path("Gemfile", destination_root)
+  #   File.open(absolute, "r") do |f|
+  #     f.each_line do |line|
+  #       assert_no_match %r{/^[ \t]+$/}, line
+  #     end
+  #   end
+  # end
 
-  def test_config_database_is_added_by_default
-    run_generator
-    assert_file "config/database.yml", /sqlite3/
-    if defined?(JRUBY_VERSION)
-      assert_gem "activerecord-jdbcsqlite3-adapter"
-    else
-      assert_gem "sqlite3", "'~> 1.4'"
-    end
-  end
+  # def test_config_database_is_added_by_default
+  #   run_generator
+  #   assert_file "config/database.yml", /sqlite3/
+  #   if defined?(JRUBY_VERSION)
+  #     assert_gem "activerecord-jdbcsqlite3-adapter"
+  #   else
+  #     assert_gem "sqlite3", "'~> 1.4'"
+  #   end
+  # end
 
   def test_config_mysql_database
     run_generator([destination_root, "-d", "mysql"])
@@ -595,16 +667,16 @@ class AppGeneratorTest < Rails::Generators::TestCase
     assert_no_gem "puma"
   end
 
-  def test_generator_has_assets_gems
-    run_generator
+  # def test_generator_has_assets_gems
+  #   run_generator
+  #
+  #   assert_gem "sass-rails"
+  # end
 
-    assert_gem "sass-rails"
-  end
-
-  def test_action_cable_redis_gems
-    run_generator
-    assert_file "Gemfile", /^# gem 'redis'/
-  end
+  # def test_action_cable_redis_gems
+  #   run_generator
+  #   assert_file "Gemfile", /^# gem 'redis'/
+  # end
 
   def test_generator_if_skip_test_is_given
     run_generator [destination_root, "--skip-test"]
@@ -667,28 +739,28 @@ class AppGeneratorTest < Rails::Generators::TestCase
     end
   end
 
-  def test_inclusion_of_jbuilder
-    run_generator
-    assert_gem "jbuilder"
-  end
+  # def test_inclusion_of_jbuilder
+  #   run_generator
+  #   assert_gem "jbuilder"
+  # end
 
-  def test_inclusion_of_a_debugger
-    run_generator
-    if defined?(JRUBY_VERSION) || RUBY_ENGINE == "rbx"
-      assert_no_gem "byebug"
-    else
-      assert_gem "byebug"
-    end
-  end
-
-  def test_inclusion_of_listen_related_configuration_by_default
-    run_generator
-    if /darwin|linux/.match?(RbConfig::CONFIG["host_os"])
-      assert_listen_related_configuration
-    else
-      assert_no_listen_related_configuration
-    end
-  end
+  # def test_inclusion_of_a_debugger
+  #   run_generator
+  #   if defined?(JRUBY_VERSION) || RUBY_ENGINE == "rbx"
+  #     assert_no_gem "byebug"
+  #   else
+  #     assert_gem "byebug"
+  #   end
+  # end
+  #
+  # def test_inclusion_of_listen_related_configuration_by_default
+  #   run_generator
+  #   if /darwin|linux/.match?(RbConfig::CONFIG["host_os"])
+  #     assert_listen_related_configuration
+  #   else
+  #     assert_no_listen_related_configuration
+  #   end
+  # end
 
   def test_inclusion_of_listen_related_configuration_on_other_rubies
     ruby_engine = Object.send(:remove_const, :RUBY_ENGINE)
@@ -710,16 +782,16 @@ class AppGeneratorTest < Rails::Generators::TestCase
     assert_no_listen_related_configuration
   end
 
-  def test_evented_file_update_checker_config
-    run_generator
-    assert_file "config/environments/development.rb" do |content|
-      if /darwin|linux/.match?(RbConfig::CONFIG["host_os"])
-        assert_match(/^\s*config\.file_watcher = ActiveSupport::EventedFileUpdateChecker/, content)
-      else
-        assert_match(/^\s*# config\.file_watcher = ActiveSupport::EventedFileUpdateChecker/, content)
-      end
-    end
-  end
+  # def test_evented_file_update_checker_config
+  #   run_generator
+  #   assert_file "config/environments/development.rb" do |content|
+  #     if /darwin|linux/.match?(RbConfig::CONFIG["host_os"])
+  #       assert_match(/^\s*config\.file_watcher = ActiveSupport::EventedFileUpdateChecker/, content)
+  #     else
+  #       assert_match(/^\s*# config\.file_watcher = ActiveSupport::EventedFileUpdateChecker/, content)
+  #     end
+  #   end
+  # end
 
   def test_template_from_dir_pwd
     FileUtils.cd(Rails.root)
@@ -774,10 +846,10 @@ class AppGeneratorTest < Rails::Generators::TestCase
     assert_file "foo bar/config/database.yml", /database: foo_bar_development/
   end
 
-  def test_web_console
-    run_generator
-    assert_gem "web-console"
-  end
+  # def test_web_console
+  #   run_generator
+  #   assert_gem "web-console"
+  # end
 
   def test_web_console_with_dev_option
     run_generator [destination_root, "--dev", "--skip-bundle"]

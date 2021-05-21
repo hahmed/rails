@@ -108,10 +108,10 @@ class PluginGeneratorTest < Rails::Generators::TestCase
     return if Gem::Version.new(git_version) < Gem::Version.new("2.28.0")
 
     current_default_branch = `git config --global init.defaultBranch`
-    `git config --global init.defaultBranch master`
+    `git config --global init.defaultBranch main`
 
     run_generator
-    assert_file ".git/HEAD", /master/
+    assert_file ".git/HEAD", /main/
   ensure
     if current_default_branch && current_default_branch.strip.empty?
       `git config --global --unset init.defaultBranch`

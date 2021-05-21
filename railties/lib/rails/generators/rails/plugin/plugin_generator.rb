@@ -114,7 +114,7 @@ module Rails
       end
     end
 
-    DUMMY_IGNORE_OPTIONS = %i[dev edge master template]
+    DUMMY_IGNORE_OPTIONS = %i[dev edge main template]
 
     def generate_test_dummy(force = false)
       opts = options.transform_keys(&:to_sym).except(*DUMMY_IGNORE_OPTIONS)

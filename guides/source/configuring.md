@@ -115,6 +115,7 @@ Below are the default values associated with each target version. In cases of co
 
 #### Default Values for Target Version 6.0
 
+- `config.autoloader`: `:zeitwerk`
 - [`config.action_dispatch.use_cookies_with_metadata`](#config-action-dispatch-use-cookies-with-metadata): `true`
 - [`config.action_mailer.delivery_job`](#config-action-mailer-delivery-job): `"ActionMailer::MailDeliveryJob"`
 - [`config.action_view.default_enforce_utf8`](#config-action-view-default-enforce-utf8): `false`

@@ -17,10 +17,8 @@ module ActiveStorage
     end
 
     def upload(key, io, checksum: nil, filename: nil, **)
-      extension = File.extname(filename) if filename
-
       instrument :upload, key: key, checksum: checksum do
-        IO.copy_stream(io, make_path_for(key, extension))
+        IO.copy_stream(io, make_path_for(key, filename&.extension_with_delimiter))
         ensure_integrity_of(key, checksum) if checksum
       end
     end
@@ -98,8 +96,9 @@ module ActiveStorage
       { "Content-Type" => content_type }
     end
 
-    def path_for(key, extension:) # :nodoc:
-      File.join root, folder_for(key), key, extension
+    def path_for(key, extension = nil) # :nodoc:
+      key = key << extension if extension
+      File.join root, folder_for(key), key
     end
 
     def compose(source_keys, destination_key, **)
@@ -155,7 +154,7 @@ module ActiveStorage
         [ key[0..1], key[2..3] ].join("/")
       end
 
-      def make_path_for(key, extension:)
+      def make_path_for(key, extension = nil)
         path_for(key, extension).tap { |path| FileUtils.mkdir_p File.dirname(path) }
       end
 

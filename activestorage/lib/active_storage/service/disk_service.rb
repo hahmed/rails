@@ -16,9 +16,11 @@ module ActiveStorage
       @public = public
     end
 
-    def upload(key, io, checksum: nil, **)
+    def upload(key, io, checksum: nil, filename: nil, **)
+      extension = File.extname(filename) if filename
+
       instrument :upload, key: key, checksum: checksum do
-        IO.copy_stream(io, make_path_for(key))
+        IO.copy_stream(io, make_path_for(key, extension))
         ensure_integrity_of(key, checksum) if checksum
       end
     end
@@ -96,8 +98,8 @@ module ActiveStorage
       { "Content-Type" => content_type }
     end
 
-    def path_for(key) # :nodoc:
-      File.join root, folder_for(key), key
+    def path_for(key, extension:) # :nodoc:
+      File.join root, folder_for(key), key, extension
     end
 
     def compose(source_keys, destination_key, **)
@@ -139,7 +141,6 @@ module ActiveStorage
         url_helpers.rails_disk_service_url(verified_key_with_expiration, filename: filename, **url_options)
       end
 
-
       def stream(key)
         File.open(path_for(key), "rb") do |file|
           while data = file.read(5.megabytes)
@@ -154,8 +155,8 @@ module ActiveStorage
         [ key[0..1], key[2..3] ].join("/")
       end
 
-      def make_path_for(key)
-        path_for(key).tap { |path| FileUtils.mkdir_p File.dirname(path) }
+      def make_path_for(key, extension:)
+        path_for(key, extension).tap { |path| FileUtils.mkdir_p File.dirname(path) }
       end
 
       def ensure_integrity_of(key, checksum)

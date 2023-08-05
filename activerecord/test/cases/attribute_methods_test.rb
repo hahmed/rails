@@ -965,7 +965,7 @@ class AttributeMethodsTest < ActiveRecord::TestCase
       Topic.new(hello: "world")
     }
     assert_instance_of Topic, error.record
-    assert_equal "hello", error.attribute
+    assert_equal "hello", error.attributes.first
     assert_match "unknown attribute 'hello' for Topic.", error.message
   end
 

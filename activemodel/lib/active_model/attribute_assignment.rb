@@ -38,9 +38,17 @@ module ActiveModel
 
     private
       def _assign_attributes(attributes)
+        invalid_attributes = []
         attributes.each do |k, v|
-          _assign_attribute(k, v)
+          setter = :"#{k}="
+          if respond_to?(setter)
+            public_send(setter, v)
+          else
+            invalid_attributes << k.to_s
+          end
         end
+
+        raise UnknownAttributeError.new(self, invalid_attributes) if invalid_attributes.any?
       end
 
       def _assign_attribute(k, v)

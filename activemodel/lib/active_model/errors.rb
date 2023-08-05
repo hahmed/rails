@@ -510,12 +510,12 @@ module ActiveModel
   #   person.assign_attributes(name: 'Gorby')
   #   # => ActiveModel::UnknownAttributeError: unknown attribute 'name' for Person.
   class UnknownAttributeError < NoMethodError
-    attr_reader :record, :attribute
+    attr_reader :record, :attributes
 
-    def initialize(record, attribute)
+    def initialize(record, attributes)
       @record = record
-      @attribute = attribute
-      super("unknown attribute '#{attribute}' for #{@record.class}.")
+      @attributes = Array(attributes)
+      super("unknown attribute '#{@attributes.join(",")}' for #{@record.class}.")
     end
   end
 end

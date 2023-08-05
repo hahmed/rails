@@ -303,8 +303,8 @@ module ActiveRecord
           def extract_types_from_columns_on(table_name, keys:)
             columns = connection.schema_cache.columns_hash(table_name)
 
-            unknown_column = (keys - columns.keys).first
-            raise UnknownAttributeError.new(model.new, unknown_column) if unknown_column
+            unknown_columns = (keys - columns.keys)
+            raise UnknownAttributeError.new(model.new, unknown_columns) if unknown_columns.any?
 
             keys.index_with { |key| model.type_for_attribute(key) }
           end

@@ -76,14 +76,14 @@ class AttributeAssignmentTest < ActiveModel::TestCase
     assert_equal "world", model.description
   end
 
-  test "assign non-existing attribute" do
+  test "assign non-existing attributes" do
     model = Model.new
     error = assert_raises(ActiveModel::UnknownAttributeError) do
-      model.assign_attributes(hz: 1)
+      model.assign_attributes(hz: 1, zh: 2)
     end
 
     assert_equal model, error.record
-    assert_equal "hz", error.attribute
+    assert_includes(error.attributes, "hz", "zh")
   end
 
   test "assign private attribute" do

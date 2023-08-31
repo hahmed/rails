@@ -1,4 +1,5 @@
 name: CI
+
 on:
   push:
     branches:
@@ -22,26 +23,24 @@ env:
   ENCODED: "U0FVQ0VfQUNDRVNTX0tFWT1hMDM1MzQzZi1lOTIyLTQwYjMtYWEzYy0wNmIzZWE2MzVjNDggU0FVQ0VfVVNFUk5BTUU9cnVieW9ucmFpbHM="
 
 jobs:
-  tests:
+  build:
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
-        ruby: ["2.7", "3.0", "3.1", "3.2"]
         experimental: [false]
+        ruby: ["2.7", "3.0", "3.1", "3.2"]
         include:
-        - ruby: head
-          experimental: true
-        - ruby: jruby
-          experimental: true
-        - ruby: jruby-head
-          experimental: true
-        - ruby: truffleruby
-          experimental: true
-        - ruby: truffleruby-head
-          experimental: true
-
+          - ruby: head
+            experimental: true
+          - ruby: jruby
+            experimental: true
+          - ruby: jruby-head
+            experimental: true
+          - ruby: truffleruby
+            experimental: true
+          - ruby: truffleruby-head
+            experimental: true
     services:
       mysql:
         image: mysql:latest
@@ -62,222 +61,304 @@ jobs:
           --health-timeout 5s
           --health-retries 3
 
-    name: ${{ matrix.ruby }}
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        codename="$(. /etc/os-release; x="${VERSION_CODENAME-${VERSION#*(}}"; echo "${x%%[ )]*}")"
+        if ! which gpg || ! which curl; then \
+          apt-get update \
+          && apt-get install -y --no-install-recommends \
+              gnupg curl; \
+        fi
+        # Postgres apt sources
+        sudo curl -sS https://www.postgresql.org/media/keys/ACCC4CF8.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 sudo apt-key add -
+        sudo add-apt-repository "deb http://apt.postgresql.org/pub/repos/apt/ ${codename}-pgdg main"
+        # Node apt sources
+        sudo  curl -sS https://deb.nodesource.com/gpgkey/nodesource.gpg.key | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 sudo apt-key add -
+        sudo add-apt-repository "deb http://deb.nodesource.com/node_18.x ${codename} main"
+        # Yarn apt sources
+        sudo curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 sudo apt-key add -
+        sudo add-apt-repository "deb http://dl.yarnpkg.com/debian/ stable main"
+        # Install dependencies
+        sudo apt-get install -y --no-install-recommends \
+        autoconf \
+        automake \
+        bzip2 \
+        dpkg-dev \
+        file \
+        g++ \
+        gcc \
+        imagemagick \
+        libbz2-dev \
+        libc6-dev \
+        libcurl4-openssl-dev \
+        libdb-dev \
+        libevent-dev \
+        libffi-dev \
+        libgdbm-dev \
+        libgeoip-dev \
+        libglib2.0-dev \
+        libjpeg-dev \
+        libkrb5-dev \
+        liblzma-dev \
+        libmagickcore-dev \
+        libmagickwand-dev \
+        libncurses5-dev \
+        libncursesw5-dev \
+        libpng-dev \
+        libpq-dev \
+        libreadline-dev \
+        libsqlite3-dev \
+        libssl-dev \
+        libtool \
+        libvips-dev \
+        libwebp-dev \
+        libxml2-dev \
+        libxslt-dev \
+        libyaml-dev \
+        make \
+        patch \
+        unzip \
+        xz-utils \
+        zlib1g-dev \
+        imagemagick \
+        postgresql-client-15 \
+        libmysqlclient-dev \
+        default-mysql-client \
+        sqlite3 \
+        nodejs \
+        yarn \
+        ffmpeg \
+        mupdf \
+        mupdf-tools \
+        poppler-utils
+
+    - name: Set up Redis
+      uses: supercharge/redis-github-action@1.2.0
+
+    - name: Set up Memcached
+      uses: niden/actions-memcached@v7
+
+    - name: Set up Chrome with Docker
+      run: |
+        docker pull selenium/standalone-chrome:latest
+        docker run -d -p 4444:4444 selenium/standalone-chrome
+
+    # For activejob integration tests
+    - name: Start Beanstalkd container
+      uses: docker://schickling/beanstalkd
+      with:
+        args: -p 11300:11300
+      continue-on-error: true
+
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ matrix.ruby }}
+        bundler-cache: false
+      env:
+        BUNDLE_DEPLOYMENT: false
+
+    - name: Update RubyGems and Bundler
+      run: |
+        gem update --system
+        gem install bundler
+        ruby --version
+        gem --version
+        bundle --version
+
+    - name: Cache dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.bundle
+        key: ${{ runner.os }}-ruby-${{ matrix.ruby }}-${{ hashFiles('**/Gemfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-ruby-${{ matrix.ruby }}-
+          ${{ runner.os }}-ruby-
+
+    - name: Install bundler dependencies
+      run: bundle config unset deployment && bundle install --jobs 4 --retry 3
+      timeout-minutes: 3
+
+    - name: MYSQL - Grant all privileges to rails user
+      run: |
+        mysql -h 127.0.0.1 -P 3306 -u root -e "
+          create user 'rails'@'%';
+          grant all privileges on activerecord_unittest.* to rails@'%';
+          grant all privileges on activerecord_unittest2.* to rails@'%';
+          grant all privileges on inexistent_activerecord_unittest.* to rails@'%';
+          create database activerecord_unittest default character set utf8mb4;
+          create database activerecord_unittest2 default character set utf8mb4;
+        "
+
+  actioncable:
+    name: Action Cable tests
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        experimental: [false]
+        ruby: ["2.7", "3.0", "3.1", "3.2"]
+        include:
+          - ruby: head
+            experimental: true
+          - ruby: jruby
+            experimental: true
+          - ruby: jruby-head
+            experimental: true
+          - ruby: truffleruby
+            experimental: true
+          - ruby: truffleruby-head
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
 
     steps:
-      - uses: actions/checkout@v3
+    - name: Run Action Cable tests
+      timeout-minutes: 3
+      run: cd actioncable && bundle exec rake test
 
-      - name: Install dependencies
-        run: |
-          codename="$(. /etc/os-release; x="${VERSION_CODENAME-${VERSION#*(}}"; echo "${x%%[ )]*}")"
-          if ! which gpg || ! which curl; then \
-            apt-get update \
-            && apt-get install -y --no-install-recommends \
-                gnupg curl; \
-          fi
-          # Postgres apt sources
-          sudo curl -sS https://www.postgresql.org/media/keys/ACCC4CF8.asc | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 sudo apt-key add -
-          sudo add-apt-repository "deb http://apt.postgresql.org/pub/repos/apt/ ${codename}-pgdg main"
-          # Node apt sources
-          sudo  curl -sS https://deb.nodesource.com/gpgkey/nodesource.gpg.key | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 sudo apt-key add -
-          sudo add-apt-repository "deb http://deb.nodesource.com/node_18.x ${codename} main"
-          # Yarn apt sources
-          sudo curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1 sudo apt-key add -
-          sudo add-apt-repository "deb http://dl.yarnpkg.com/debian/ stable main"
-          # Install dependencies
-          sudo apt-get install -y --no-install-recommends \
-          autoconf \
-          automake \
-          bzip2 \
-          dpkg-dev \
-          file \
-          g++ \
-          gcc \
-          imagemagick \
-          libbz2-dev \
-          libc6-dev \
-          libcurl4-openssl-dev \
-          libdb-dev \
-          libevent-dev \
-          libffi-dev \
-          libgdbm-dev \
-          libgeoip-dev \
-          libglib2.0-dev \
-          libjpeg-dev \
-          libkrb5-dev \
-          liblzma-dev \
-          libmagickcore-dev \
-          libmagickwand-dev \
-          libncurses5-dev \
-          libncursesw5-dev \
-          libpng-dev \
-          libpq-dev \
-          libreadline-dev \
-          libsqlite3-dev \
-          libssl-dev \
-          libtool \
-          libvips-dev \
-          libwebp-dev \
-          libxml2-dev \
-          libxslt-dev \
-          libyaml-dev \
-          make \
-          patch \
-          unzip \
-          xz-utils \
-          zlib1g-dev \
-          imagemagick \
-          postgresql-client-15 \
-          libmysqlclient-dev \
-          default-mysql-client \
-          sqlite3 \
-          nodejs \
-          yarn \
-          ffmpeg \
-          mupdf \
-          mupdf-tools \
-          poppler-utils
+  actioncable_integration:
+    name: Action Cable integration tests
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        experimental: [false]
+        ruby: ["2.7", "3.0", "3.1", "3.2"]
+        include:
+          - ruby: head
+            experimental: true
+          - ruby: jruby
+            experimental: true
+          - ruby: jruby-head
+            experimental: true
+          - ruby: truffleruby
+            experimental: true
+          - ruby: truffleruby-head
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
 
-      - name: MYSQL - Grant all privileges to rails user
-        run: |
-          mysql -h 127.0.0.1 -P 3306 -u root -e "
-            create user 'rails'@'%';
-            grant all privileges on activerecord_unittest.* to rails@'%';
-            grant all privileges on activerecord_unittest2.* to rails@'%';
-            grant all privileges on inexistent_activerecord_unittest.* to rails@'%';
-            create database activerecord_unittest default character set utf8mb4;
-            create database activerecord_unittest2 default character set utf8mb4;
-          "
+  actionmailbox:
+    name: Action Mailbox tests
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        experimental: [false]
+        ruby: ["2.7", "3.0", "3.1", "3.2"]
+        include:
+          - ruby: head
+            experimental: true
+          - ruby: jruby
+            experimental: true
+          - ruby: jruby-head
+            experimental: true
+          - ruby: truffleruby
+            experimental: true
+          - ruby: truffleruby-head
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
 
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: ${{ matrix.ruby }}
-          bundler-cache: false
-        env:
-          BUNDLE_DEPLOYMENT: false
+    steps:
+    - name: Run Action mailbox tests
+      timeout-minutes: 3
+      run: cd actionmailbox && bundle exec rake test
 
-      - name: Set up Redis
-        uses: supercharge/redis-github-action@1.2.0
+  actionmailer:
+    name: Action Mailer tests
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        experimental: [false]
+        ruby: ["2.7", "3.0", "3.1", "3.2"]
+        include:
+          - ruby: head
+            experimental: true
+          - ruby: jruby
+            experimental: true
+          - ruby: jruby-head
+            experimental: true
+          - ruby: truffleruby
+            experimental: true
+          - ruby: truffleruby-head
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
 
-      - name: Set up Memcached
-        uses: niden/actions-memcached@v7
+    steps:
+    - name: Run Action Mailer tests
+      timeout-minutes: 3
+      run: cd actionmailer && bundle exec rake test
 
-      - name: Set up Chrome with Docker
-        run: |
-          docker pull selenium/standalone-chrome:latest
-          docker run -d -p 4444:4444 selenium/standalone-chrome
+  # - name: Run Action Pack tests
+  #   timeout-minutes: 3
+  #   run: cd actionpack && bundle exec rake test
 
-      # For activejob integration tests
-      - name: Start Beanstalkd container
-        uses: docker://schickling/beanstalkd
-        with:
-          args: -p 11300:11300
-        continue-on-error: true
+  # - name: Run Action Text tests
+  #   timeout-minutes: 3
+  #   run: cd actiontext && bundle exec rake test
 
-      - name: Update RubyGems and Bundler
-        run: |
-          gem update --system
-          gem install bundler
-          ruby --version
-          gem --version
-          bundle --version
+  # - name: Run Action View tests
+  #   timeout-minutes: 3
+  #   run: cd actionview && bundle exec rake test
 
-      - name: Cache dependencies
-        uses: actions/cache@v2
-        with:
-          path: ~/.bundle
-          key: ${{ runner.os }}-ruby-${{ matrix.ruby }}-${{ hashFiles('**/Gemfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-ruby-${{ matrix.ruby }}-
-            ${{ runner.os }}-ruby-
+  # - name: Run Action View tests:ujs
+  #   timeout-minutes: 3
+  #   run: |
+  #     npm install
+  #     cd actionview && bundle exec rake test:ujs
+  #   continue-on-error: true
 
-      - name: Install bundler dependencies
-        run: bundle config unset deployment && bundle install --jobs 4 --retry 3
+  # - name: Run Active Job tests
+  #   timeout-minutes: 3
+  #   run: cd activejob && bundle exec rake test
 
-      - name: Run Action Cable tests
-        timeout-minutes: 3
-        run: cd actioncable && bundle exec rake test
+  # - name: Run Active Job Integration tests
+  #   timeout-minutes: 3
+  #   run: cd activejob && bundle exec rake test:integration
+  #   continue-on-error: true
 
-      - name: Run Action Cable Integration tests
-        timeout-minutes: 3
-        run: |
-          yarn install
-          yarn cache clean
-          cd actioncable && bundle exec rake test:integration
-        continue-on-error: true
+  # - name: Run Active Model tests
+  #   timeout-minutes: 3
+  #   run: cd activemodel && bundle exec rake test
 
-      # - name: Run Action Mailbox tests
-      #   timeout-minutes: 3
-      #   run: cd actionmailbox && bundle exec rake test
+  # - name: Run Active Record tests Sqlite3
+  #   timeout-minutes: 3
+  #   run: cd activerecord && bundle exec rake sqlite3:test
 
-      # - name: Run Action Mailer tests
-      #   timeout-minutes: 3
-      #   run: cd actionmailer && bundle exec rake test
+  # - name: Run Active Record tests MySQL
+  #   timeout-minutes: 8
+  #   run: cd activerecord && bundle exec rake db:mysql:rebuild && bundle exec rake mysql2:test
 
-      # - name: Run Action Pack tests
-      #   timeout-minutes: 3
-      #   run: cd actionpack && bundle exec rake test
+  # - name: Run Active Record tests Trilogy
+  #   timeout-minutes: 8
+  #   run: cd activerecord && bundle exec rake db:mysql:rebuild && bundle exec rake trilogy:test
 
-      # - name: Run Action Text tests
-      #   timeout-minutes: 3
-      #   run: cd actiontext && bundle exec rake test
+  # - name: Run Active Record tests Postgresql
+  #   timeout-minutes: 8
+  #   run: cd activerecord && bundle exec rake db:postgresql:rebuild && bundle exec rake postgresql:test
 
-      # - name: Run Action View tests
-      #   timeout-minutes: 3
-      #   run: cd actionview && bundle exec rake test
+  # - name: Run Active Storage tests
+  #   timeout-minutes: 3
+  #   run: cd activestorage && bundle exec rake test
 
-      # - name: Run Action View tests:ujs
-      #   timeout-minutes: 3
-      #   run: |
-      #     npm install
-      #     cd actionview && bundle exec rake test:ujs
-      #   continue-on-error: true
+  # - name: Run Active Support tests
+  #   timeout-minutes: 3
+  #   run: cd activesupport && bundle exec rake test
 
-      # - name: Run Active Job tests
-      #   timeout-minutes: 3
-      #   run: cd activejob && bundle exec rake test
+  # - name: Run Railties tests
+  #   timeout-minutes: 20
+  #   run: cd railties && bundle exec rake test
+  #   env:
+  #     BUILDKITE_PARALLEL_JOB:
+  #     BUILDKITE_PARALLEL_JOB_COUNT:
 
-      # - name: Run Active Job Integration tests
-      #   timeout-minutes: 3
-      #   run: cd activejob && bundle exec rake test:integration
-      #   continue-on-error: true
-
-      # - name: Run Active Model tests
-      #   timeout-minutes: 3
-      #   run: cd activemodel && bundle exec rake test
-
-      # - name: Run Active Record tests Sqlite3
-      #   timeout-minutes: 3
-      #   run: cd activerecord && bundle exec rake sqlite3:test
-
-      # - name: Run Active Record tests MySQL
-      #   timeout-minutes: 8
-      #   run: cd activerecord && bundle exec rake db:mysql:rebuild && bundle exec rake mysql2:test
-
-      # - name: Run Active Record tests Trilogy
-      #   timeout-minutes: 8
-      #   run: cd activerecord && bundle exec rake db:mysql:rebuild && bundle exec rake trilogy:test
-
-      # - name: Run Active Record tests Postgresql
-      #   timeout-minutes: 8
-      #   run: cd activerecord && bundle exec rake db:postgresql:rebuild && bundle exec rake postgresql:test
-
-      # - name: Run Active Storage tests
-      #   timeout-minutes: 3
-      #   run: cd activestorage && bundle exec rake test
-
-      # - name: Run Active Support tests
-      #   timeout-minutes: 3
-      #   run: cd activesupport && bundle exec rake test
-
-      # - name: Run Railties tests
-      #   timeout-minutes: 20
-      #   run: cd railties && bundle exec rake test
-      #   env:
-      #     BUILDKITE_PARALLEL_JOB:
-      #     BUILDKITE_PARALLEL_JOB_COUNT:
-
-      # - name: Guides
-      #   timeout-minutes: 3
-      #   run: cd guides && bundle exec rake test
+  # - name: Guides
+  #   timeout-minutes: 3
+  #   run: cd guides && bundle exec rake test

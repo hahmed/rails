@@ -19,6 +19,8 @@ env:
   PGPORT: 5432
   BUNDLE_DEPLOYMENT: false
   BEANSTALK_URL: "beanstalk://127.0.0.1:11300"
+  RABBITMQ_URL: "amqp://guest:guest@127.0.0.1:5672"
+  QC_DATABASE_URL: "postgres://postgres@127.0.0.1/active_jobs_qc_int_test"
   # Sauce Labs username and access key. Obfuscated, purposefully not encrypted.
   ENCODED: "U0FVQ0VfQUNDRVNTX0tFWT1hMDM1MzQzZi1lOTIyLTQwYjMtYWEzYy0wNmIzZWE2MzVjNDggU0FVQ0VfVVNFUk5BTUU9cnVieW9ucmFpbHM="
 
@@ -53,10 +55,8 @@ jobs:
       fail-fast: false
       matrix:
         experimental: [false]
-        # ruby: [3.2, 3.1, 3.0, 2.7]
-        ruby: [3.2]
-        framework: [guides]
-        # framework: [actioncable, actionmailbox, actionmailer, actionpack, actiontext, actionview, activemodel, activerecord_sqlite3, activerecord_mysql2, activerecord_trilogy, activerecord_postgresql, activestorage, activesupport, railties, actioncable_integration, actionview_ujs, activejob_integration, actiontext_integration, guides]
+        ruby: [3.2, 3.1, 3.0, 2.7]
+        framework: [actioncable, actionmailbox, actionmailer, actionpack, actiontext, actionview, activemodel, activerecord_sqlite3, activerecord_mysql2, activerecord_trilogy, activerecord_postgresql, activestorage, activesupport, railties, actioncable_integration, actionview_ujs, activejob_integration, actiontext_integration, guides]
         include:
           - ruby: head
             experimental: true
@@ -146,25 +146,10 @@ jobs:
       - name: Set up Memcached
         uses: niden/actions-memcached@v7
 
-      # - name: Build Beanstalkd Docker image
-      #   uses: docker/build-push-action@v2
-      #   with:
-      #     context: .
-      #     file: ./github/workflows/Dockerfile.beanstalkd
-      #     push: false
-      #     tags: my-image:latest
-
-      # For activejob integration tests
-      - name: Start Beanstalkd
-        if: ${{ matrix.framework == 'activejob_integration' }}
-        run: beanstalkd -p 11300
-
-      # - name: Start Beanstalkd container
-      #   uses: docker/compose-action@v1
-      #   if: ${{ matrix.framework == 'activejob_integration' }}
-      #   with:
-      #     args: -p 11300:11300 -l 127.0.0.1
-      #   continue-on-error: true
+      - name: Start RabbitMQ container
+        if: ${{ matrix.framework == 'activejob_integration'}}
+        run: |
+          docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 -e RABBITMQ_DEFAULT_USER=guest -e RABBITMQ_DEFAULT_PASS=guest rabbitmq:alpine
 
       - name: MYSQL - Grant all privileges to rails user
         run: |
@@ -177,11 +162,9 @@ jobs:
             create database activerecord_unittest2 default character set utf8mb4;
           "
 
-      - name: yarn install
+      - name: npm install
         timeout-minutes: 3
-        run: |
-          yarn install
-          yarn cache clean
+        run: npm install
 
       - name: ${{ matrix.framework }}
         run: |

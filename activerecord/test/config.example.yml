@@ -108,11 +108,29 @@ connections:
   postgresql:
     arunit:
       min_messages: warning
+    <% if ENV['PGHOST'] %>
+      host: <%= ENV['PGHOST'] %>
+    <% end %>
+    <% if ENV['PGPORT'] %>
+      port: <%= ENV['PGPORT'] %>
+    <% end %>
     arunit_without_prepared_statements:
       min_messages: warning
       prepared_statements: false
+    <% if ENV['PGHOST'] %>
+      host: <%= ENV['PGHOST'] %>
+    <% end %>
+    <% if ENV['PGPORT'] %>
+      port: <%= ENV['PGPORT'] %>
+    <% end %>
     arunit2:
       min_messages: warning
+     <% if ENV['PGHOST'] %>
+      host: <%= ENV['PGHOST'] %>
+    <% end %>
+    <% if ENV['PGPORT'] %>
+      port: <%= ENV['PGPORT'] %>
+    <% end %>
 
   sqlite3:
     arunit:

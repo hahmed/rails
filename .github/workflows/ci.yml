@@ -175,6 +175,10 @@ jobs:
           if [[ $instructions == *,* ]]; then
             instructions=$(echo "$instructions" | sed 's/,/ \&\& bundle exec rake /g')
           fi
-          instructions="bundle exec rake $instructions"
+          if [[ $instructions == 'guides' ]]; then
+            instructions="rake $instructions"
+          else
+            instructions="bundle exec rake $instructions"
+          fi
           echo "instructions: $instructions"
           eval $instructions

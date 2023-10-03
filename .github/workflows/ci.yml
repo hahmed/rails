@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - ha/migrate-to-github-actions
+      - ha/github-ci
 
 env:
   CI: true

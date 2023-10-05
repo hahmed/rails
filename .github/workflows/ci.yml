@@ -128,7 +128,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: ${{ matrix.ruby%_yjit }}
+          ruby-version: ${{ matrix.ruby == 'head_yjit' && 'head' || matrix.ruby }}
           bundler-cache: false
           rubygems: latest
           bundler: latest

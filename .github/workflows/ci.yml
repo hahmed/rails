@@ -55,11 +55,8 @@ jobs:
       fail-fast: false
       matrix:
         experimental: [false]
-        ruby: [3.2, 3.1, 3.0, 2.7]
+        ruby: [head, head_yjit]
         framework: [actioncable, actionmailbox, actionmailer, actionpack, actiontext, actionview, activemodel, activerecord_sqlite3, activerecord_mysql2, activerecord_trilogy, activerecord_postgresql, activestorage, activesupport, railties, actioncable_integration, actionview_ujs, activejob_integration, actiontext_integration, guides]
-        include:
-          - ruby: head
-            experimental: true
     outputs:
       data: ${{ steps.create_steps.outputs.data }}
 
@@ -131,10 +128,12 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: ${{ matrix.ruby }}
+          ruby-version: ${{ matrix.ruby%_yjit }}
           bundler-cache: false
           rubygems: latest
           bundler: latest
+        env:
+          RUBY_YJIT_ENABLE: ${{ matrix.ruby == 'head_yjit' && 'true' || 'false' }}
 
       - name: Install bundler dependencies
         run: bundle config unset deployment && bundle install --jobs 4 --retry 3
@@ -175,10 +174,6 @@ jobs:
           if [[ $instructions == *,* ]]; then
             instructions=$(echo "$instructions" | sed 's/,/ \&\& bundle exec rake /g')
           fi
-          if [[ $framework == 'guides' ]]; then
-            instructions="rake $instructions"
-          else
-            instructions="bundle exec rake $instructions"
-          fi
+          instructions="bundle exec rake $instructions"
           echo "instructions: $instructions"
           eval $instructions

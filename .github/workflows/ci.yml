@@ -125,19 +125,22 @@ jobs:
           libwebp-dev \
           beanstalkd
 
+      - name: Remove Gemfile.lock
+        run: rm Gemfile.lock
+
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby == 'head_yjit' && 'head' || matrix.ruby }}
-          bundler-cache: false
+          bundler-cache: true
           rubygems: latest
           bundler: latest
         env:
-          RUBY_YJIT_ENABLE: ${{ matrix.ruby == 'head_yjit' && 'true' || 'false' }}
+          RUBY_YJIT_ENABLE: ${{ matrix.ruby == 'head_yjit' && '1' || '' }}
 
-      - name: Install bundler dependencies
-        run: bundle config unset deployment && bundle install --jobs 4 --retry 3
-        timeout-minutes: 3
+      # - name: Install bundler dependencies
+      #   run: bundle config unset deployment && bundle install --jobs 4 --retry 3
+      #   timeout-minutes: 3
 
       - name: Set up Redis
         uses: supercharge/redis-github-action@1.2.0

@@ -138,8 +138,16 @@ jobs:
         env:
           RUBY_YJIT_ENABLE: ${{ matrix.ruby == 'head_yjit' && '1' || '' }}
 
+      - name: Cache bundler gems
+        uses: actions/cache@v2
+        with:
+          path: vendor/bundle
+          key: ${{ runner.os }}-ruby-${{ matrix.ruby }}-bundler-${{ hashFiles('**/Gemfile') }}
+          restore-keys: |
+            ${{ runner.os }}-ruby-${{ matrix.ruby }}-bundler-${{ hashFiles('**/Gemfile') }}
+
       - name: Install bundler dependencies
-        run: bundle config unset deployment && bundle install --jobs 4 --retry 3
+        run: bundle install --jobs 4 --retry 3
         timeout-minutes: 3
 
       - name: Set up Redis
@@ -166,6 +174,7 @@ jobs:
 
       - name: npm install
         timeout-minutes: 3
+        if: ${{ matrix.framework == 'actionview_ujs' ||  matrix.framework == 'actioncable_integration'  }}
         run: npm install
 
       - name: ${{ matrix.framework }}

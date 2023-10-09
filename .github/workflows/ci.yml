@@ -55,7 +55,7 @@ jobs:
       fail-fast: false
       matrix:
         experimental: [false]
-        ruby: [head, head_yjit]
+        ruby: [3.2, 3.1, 3.0, 2.7, head, head_yjit]
         framework: [actioncable, actionmailbox, actionmailer, actionpack, actiontext, actionview, activemodel, activerecord_sqlite3, activerecord_mysql2, activerecord_trilogy, activerecord_postgresql, activestorage, activesupport, railties, actioncable_integration, actionview_ujs, activejob_integration, actiontext_integration, guides]
     outputs:
       data: ${{ steps.create_steps.outputs.data }}

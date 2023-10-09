@@ -147,7 +147,7 @@ jobs:
             ${{ runner.os }}-ruby-${{ matrix.ruby }}-bundler-${{ hashFiles('**/Gemfile') }}
 
       - name: Install bundler dependencies
-        run: bundle install --jobs 4 --retry 3
+        run: bundle install --jobs 4 --retry 3 --path $PWD/vendor/bundle
         timeout-minutes: 3
 
       - name: Set up Redis

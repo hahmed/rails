@@ -122,6 +122,15 @@ class ActiveStorage::Attachment < ActiveStorage::Record
     blob.representation(transformations)
   end
 
+  # Authorize attachments
+  def authorize_blob?
+    if record.respond_to?(override_authentication_name)
+      record.try(override_authentication_name)
+    else
+      fallback_authorization || true
+    end
+  end
+
   private
     def analyze_blob_later
       blob.analyze_later unless blob.analyzed?
@@ -170,6 +179,14 @@ class ActiveStorage::Attachment < ActiveStorage::Record
       else
         transformations
       end
+    end
+
+    def fallback_authorization
+      record.try(:authorize_blob?)
+    end
+  
+    def override_authentication_name
+      @_override_authentication_name ||= "authorize_blob_#{name}?".to_sym
     end
 end
 

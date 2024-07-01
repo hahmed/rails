@@ -2,6 +2,7 @@
 
 class ActiveStorage::Representations::BaseController < ActiveStorage::BaseController # :nodoc:
   include ActiveStorage::SetBlob
+  include ActiveStorage::Authorize
 
   before_action :set_representation
 

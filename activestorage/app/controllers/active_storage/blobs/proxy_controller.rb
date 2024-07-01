@@ -10,6 +10,7 @@ class ActiveStorage::Blobs::ProxyController < ActiveStorage::BaseController
   include ActiveStorage::SetBlob
   include ActiveStorage::Streaming
   include ActiveStorage::DisableSession
+  include ActiveStorage::Authorize
 
   def show
     if request.headers["Range"].present?

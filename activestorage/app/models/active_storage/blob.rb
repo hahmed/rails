@@ -244,7 +244,6 @@ class ActiveStorage::Blob < ActiveStorage::Record
     service.headers_for_direct_upload key, filename: filename, content_type: content_type, content_length: byte_size, checksum: checksum, custom_metadata: custom_metadata
   end
 
-
   # Uploads the +io+ to the service on the +key+ for this blob. Blobs are intended to be immutable, so you shouldn't be
   # using this method after a file has already been uploaded to fit with a blob. If you want to create a derivative blob,
   # you should instead simply create a new blob based on the old one.
@@ -343,6 +342,11 @@ class ActiveStorage::Blob < ActiveStorage::Record
   # Returns an instance of service, which can be configured globally or per attachment
   def service
     services.fetch(service_name)
+  end
+
+  # Authorize access to a blob
+  def authorize_blob?
+    attachments.includes(:record).any? { |attachment| attachment.authorize_blob? } || attachments.none?
   end
 
   private
